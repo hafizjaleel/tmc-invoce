@@ -6,15 +6,14 @@ const connectDB = async () => {
         await mongoose.connect(mongoUri, {
             useNewUrlParser: true,
             useUnifiedTopology: true,
-            ssl: true,
-            tlsAllowInvalidCertificates: true, // Only use in development
-            retryWrites: true
+            retryWrites: true,
+            serverSelectionTimeoutMS: 5000,
+            socketTimeoutMS: 45000,
         });
         console.log('MongoDB connected successfully');
     } catch (err) {
         console.error('MongoDB connection error:', err);
-        // Retry connection after 5 seconds
-        setTimeout(connectDB, 5000);
+        process.exit(1);
     }
 };
 
@@ -24,6 +23,5 @@ connectDB();
 // Handle connection errors
 mongoose.connection.on('error', (err) => {
     console.error('MongoDB error:', err);
-    // Attempt to reconnect
     connectDB();
 });
