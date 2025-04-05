@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f5f5f5;
+        }
+        .invoice-container {
+            position: relative;
+            width: 210mm;
+            height: 297mm;
+            margin: auto;
+            background-color: white;
+            overflow: visible;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .invoice-image {
+            width: 100%;
+            height: 100%;
+            object-fit: fill;
+            display: block;
+        }
+        .field {
+            position: absolute;
+            font-size: 14px;
+            color: #000000;
+            font-weight: 500;
+        }
+        .invoice-no { 
+            top: 100px; 
+            right: 80px;
+            font-size: 16px;
+            color: #000000;
+            font-weight: 600;
+        }
+        .client-name { 
+            top: 240px; 
+            left: 100px;
+            font-size: 15px;
+            font-weight: 600;
+            color: #000000;
+        }
+        .client-address { 
+            top: 260px; 
+            left: 100px;
+            white-space: pre-line;
+            color: #000000;
+            line-height: 1.4;
+        }
+        .issue-date { 
+            top: 227px; 
+            left: 610px;
+            color: #000000;
+        }
+        .amount-due { 
+            top: 700px; 
+            left: 670px;
+            font-weight: bold;
+            font-size: 16px;
+            color: #000000;
+        }
+        .services-table { 
+            top: 380px; 
+            left: 50px; 
+            width: 730px;
+            border-collapse: collapse;
+        }
+        .services-table td {
+            padding: 8px 5px;
+            vertical-align: top;
+            color: #000000;
+            line-height: 1.4;
+        }
+        .services-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .services-table tr:hover {
+            background-color: #f5f5f5;
+        }
+        /* Column specific styling */
+        .services-table td:nth-child(1) {
+            width: 30px;
+            text-align: left;
+            padding-right: 10px;
+            color: #000000;
+        }
+        .services-table td:nth-child(2) {
+            width: 230px;
+            text-align: left;
+            padding-left: 25px;
+            font-weight: 500;
+        }
+        .services-table td:nth-child(3) {
+            width: 60px;
+            text-align: left;
+            padding-left: 100px;
+            color: #000000;
+        }
+        .services-table td:nth-child(4), .services-table td:nth-child(5) {
+            width: 100px;
+            text-align: left;
+            padding-left: 0px;
+            font-family: 'Consolas', monospace;
+            color: #000000;
+        }
+        button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .home-btn {
+            right: 300px;
+            background-color: #27ae60;
+        }
+        .home-btn:hover {
+            background-color: #219a52;
+        }
+        @media print {
+            body { padding: 0; background-color: white; }
+            button { display: none; }
+            .invoice-container { box-shadow: none; }
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+<body>
+    <div class="invoice-container">
+        <img src="image.svg" alt="Invoice" class="invoice-image">
+        <div class="field invoice-no" id="invoiceNumberField"></div>
+        <div class="field client-name" id="clientNameField"></div>
+        <div class="field client-address" id="clientAddressField"></div>
+        <div class="field issue-date" id="issueDateField"></div>
+        <table class="field services-table" id="servicesTableField"></table>
+        <div class="field amount-due" id="amountDueField"></div>
+    </div>
+    <button onclick="generatePDF()">Print Invoice</button>
+    <button onclick="viewInvoices()" style="right: 160px;">View Invoices</button>
+    <button onclick="goHome()" class="home-btn">Home</button>
+    <script>
+        function goHome() {
+            window.location.href = '/';
+        }
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        
+        // Function to save invoice data using fetch API
+        async function saveInvoiceData() {
+            const services = [];
+            let serviceIndex = 1;
+            while (urlParams.get(`serviceName${serviceIndex}`)) {
+                services.push({
+                    name: urlParams.get(`serviceName${serviceIndex}`),
+                    count: urlParams.get(`serviceCount${serviceIndex}`),
+                    price: urlParams.get(`servicePrice${serviceIndex}`)
+                });
+                serviceIndex++;
+            }
+
+            const invoiceData = {
+                invoiceNumber: urlParams.get('invoiceNumber'),
+                clientName: urlParams.get('clientName'),
+                clientAddress: urlParams.get('clientAddress'),
+                issueDate: urlParams.get('issueDate'),
+                amountDue: urlParams.get('amountDue'),
+                services: services
+            };
+
+            try {
+                const response = await fetch('/api/invoices', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(invoiceData)
+                });
+                const result = await response.json();
+                console.log('Invoice saved:', result);
+            } catch (error) {
+                console.error('Error saving invoice:', error);
+            }
+        }
+
+        function viewInvoices() {
+            window.location.href = '/invoices.html';
+        }
+
+        // Populate basic fields
+        document.getElementById('invoiceNumberField').textContent = `#${urlParams.get('invoiceNumber')}`;
+        document.getElementById('clientNameField').textContent = urlParams.get('clientName');
+        document.getElementById('clientAddressField').textContent = urlParams.get('clientAddress');
+        document.getElementById('issueDateField').textContent = new Date(urlParams.get('issueDate')).toLocaleDateString();
+        document.getElementById('amountDueField').textContent = `₹${urlParams.get('amountDue')}`;
+
+        // Create services table
+        const servicesTable = document.getElementById('servicesTableField');
+        let tableHTML = '';
+
+        let serviceIndex = 1;
+        while (urlParams.get(`serviceName${serviceIndex}`)) {
+            const name = urlParams.get(`serviceName${serviceIndex}`);
+            const count = urlParams.get(`serviceCount${serviceIndex}`);
+            const price = urlParams.get(`servicePrice${serviceIndex}`);
+            const total = parseFloat(count) * parseFloat(price);
+
+            tableHTML += `
+                <tr>
+                    <td>${serviceIndex}.</td>
+                    <td>${name}</td>
+                    <td>${count}</td>
+                    <td>₹ ${parseFloat(price).toFixed(2)}</td>
+                    <td>₹ ${total.toFixed(2)}</td>
+                </tr>
+            `;
+            serviceIndex++;
+        }
+        servicesTable.innerHTML = tableHTML;
+
+        function generatePDF() {
+            // Save invoice data before generating PDF
+            saveInvoiceData();
+
+            const element = document.querySelector('.invoice-container');
+            const opt = {
+                margin: 0,
+                filename: `invoice-${urlParams.get('invoiceNumber')}.pdf`,
+                image: { type: 'jpeg', quality: 1 },
+                html2canvas: { 
+                    scale: 4,
+                    useCORS: true,
+                    logging: true,
+                    letterRendering: true,
+                    width: element.offsetWidth,
+                    height: element.offsetHeight,
+                    scrollX: 0,
+                    scrollY: 0
+                },
+                jsPDF: { 
+                    unit: 'mm', 
+                    format: 'a4',
+                    orientation: 'portrait',
+                    compress: false,
+                    hotfixes: ["px_scaling"]
+                }
+            };
+            // Remove any scaling before generating PDF
+            element.style.transform = 'none';
+
+            html2pdf()
+                .set(opt)
+                .from(element)
+                .save()
+                .catch(err => console.error('PDF generation failed:', err));
+        }
+    </script>
+</body>
+</html>

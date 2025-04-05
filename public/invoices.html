@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saved Invoices</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .invoice-list {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .invoice-item {
+            background: white;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 8px;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        .invoice-item:hover {
+            transform: translateY(-2px);
+        }
+        .search-container {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .search-container input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        .search-container button {
+            background-color: #2980b9;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: white;
+            transition: 0.3s;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: white;
+            transition: 0.3s;
+        }
+        .print-btn {
+            background-color: #27ae60;
+        }
+        .edit-btn {
+            background-color: #3498db;
+        }
+        .delete-btn {
+            background-color: #e74c3c;
+        }
+        button:hover {
+            opacity: 0.8;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="invoice-list">
+        <h1>Saved Invoices</h1>
+        
+        <div class="search-container">
+            <input type="text" id="invoiceSearch" placeholder="Invoice Number">
+            <input type="text" id="clientSearch" placeholder="Client Name">
+            <button onclick="searchInvoices()">Search</button>
+        </div>
+
+        <div id="invoices"></div>
+    </div>
+
+    <script>
+        async function searchInvoices() {
+            const invoiceNumber = document.getElementById('invoiceSearch').value;
+            const clientName = document.getElementById('clientSearch').value;
+            
+            try {
+                const params = new URLSearchParams();
+                if (invoiceNumber) params.append('invoiceNumber', invoiceNumber);
+                if (clientName) params.append('clientName', clientName);
+                
+                const response = await fetch(`/api/invoices/search?${params}`);
+                const invoices = await response.json();
+                displayInvoices(invoices);
+            } catch (error) {
+                console.error('Error searching invoices:', error);
+            }
+        }
+
+        function displayInvoices(invoices) {
+            const container = document.getElementById('invoices');
+            container.innerHTML = '';
+            
+            invoices.forEach(invoice => {
+                const div = document.createElement('div');
+                div.className = 'invoice-item';
+                div.innerHTML = `
+                    <h3>Invoice #${invoice.invoiceNumber}</h3>
+                    <p>Client: ${invoice.clientName}</p>
+                    <p>Date: ${new Date(invoice.issueDate).toLocaleDateString()}</p>
+                    <p>Amount: ₹${invoice.amountDue}</p>
+                    <div class="action-buttons">
+                        <button class="print-btn" onclick="openInvoice('${invoice.invoiceNumber}', '${invoice.clientName}', '${invoice.clientAddress}', '${invoice.issueDate}', '${invoice.amountDue}')">Print</button>
+                        <button class="edit-btn" onclick="editInvoice('${invoice._id}')">Edit</button>
+                        <button class="delete-btn" onclick="deleteInvoice('${invoice._id}')">Delete</button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        async function deleteInvoice(id) {
+            if (!confirm('Are you sure you want to delete this invoice?')) return;
+            
+            try {
+                const response = await fetch(`/api/invoices/${id}`, {
+                    method: 'DELETE'
+                });
+                if (response.ok) {
+                    // Remove the invoice from DOM instead of reloading
+                    await loadInvoices();
+                    alert('Invoice deleted successfully');
+                } else {
+                    const error = await response.json();
+                    alert('Failed to delete: ' + error.error);
+                }
+            } catch (error) {
+                console.error('Error deleting invoice:', error);
+                alert('Failed to delete invoice');
+            }
+        }
+
+        async function editInvoice(id) {
+            try {
+                const response = await fetch(`/api/invoices/${id}`);
+                if (response.ok) {
+                    const invoice = await response.json();
+                    // Store invoice data in localStorage for create-invoice page
+                    localStorage.setItem('editInvoice', JSON.stringify(invoice));
+                    window.location.href = `/create-invoice?edit=${id}`;
+                }
+            } catch (error) {
+                console.error('Error fetching invoice:', error);
+                alert('Failed to fetch invoice details');
+            }
+        }
+
+        async function loadInvoices() {
+            try {
+                const response = await fetch('/api/invoices');
+                const invoices = await response.json();
+                displayInvoices(invoices);
+            } catch (error) {
+                console.error('Error loading invoices:', error);
+            }
+        }
+
+        function openInvoice(invoiceNumber, clientName, clientAddress, issueDate, amountDue) {
+            const params = new URLSearchParams({
+                invoiceNumber,
+                clientName,
+                clientAddress,
+                issueDate,
+                amountDue
+            });
+            window.open(`invoice.html?${params}`, '_blank');
+        }
+
+        // Update window.onload
+        window.onload = loadInvoices;
+    </script>
+</body>
+</html>

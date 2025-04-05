@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice Input</title>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --background-color: #f8f9fa;
+            --border-color: #e0e0e0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            background-color: var(--background-color);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: var(--primary-color);
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        input[type="date"],
+        textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        .service-entry {
+            background-color: #f8f9fa;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+
+        .service-total {
+            background-color: #e8f4ff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 30px;
+        }
+
+        button {
+            background-color: var(--secondary-color);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        .remove-btn {
+            background-color: #e74c3c;
+        }
+
+        .remove-btn:hover {
+            background-color: #c0392b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Invoice Details</h1>
+        <form id="invoiceForm" action="invoice.html" method="GET">
+            <div class="form-group">
+                <label for="invoiceNumber">Invoice Number:</label>
+                <input type="text" id="invoiceNumber" name="invoiceNumber" required>
+            </div>
+
+            <div class="form-group">
+                <label for="clientName">Client Name:</label>
+                <input type="text" id="clientName" name="clientName" required>
+            </div>
+
+            <div class="form-group">
+                <label for="clientAddress">Client Address:</label>
+                <textarea id="clientAddress" name="clientAddress" rows="3" required></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="issueDate">Issue Date:</label>
+                <input type="date" id="issueDate" name="issueDate" required>
+            </div>
+
+            <div id="servicesContainer">
+                <h3>Services</h3>
+                <div id="servicesList"></div>
+                <button type="button" onclick="addService()">Add Service</button>
+            </div>
+
+            <div class="service-total">
+                <label for="amountDue">Total Amount Due:</label>
+                <input type="number" id="amountDue" name="amountDue" readonly>
+            </div>
+
+            <div class="form-group" style="text-align: center; margin-top: 20px;">
+                <button type="submit">Generate Invoice</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        let serviceCount = 0;
+
+        function addService() {
+            serviceCount++;
+            const serviceDiv = document.createElement('div');
+            serviceDiv.className = 'service-entry';
+            serviceDiv.innerHTML = `
+                <h4>Service #${serviceCount}</h4>
+                <label for="serviceName${serviceCount}">Service Name:</label>
+                <input type="text" id="serviceName${serviceCount}" name="serviceName${serviceCount}" required><br><br>
+                
+                <label for="serviceCount${serviceCount}">Count:</label>
+                <input type="number" id="serviceCount${serviceCount}" name="serviceCount${serviceCount}" 
+                    onchange="calculateTotal()" required><br><br>
+                
+                <label for="servicePrice${serviceCount}">Price per Unit:</label>
+                <input type="number" id="servicePrice${serviceCount}" name="servicePrice${serviceCount}" 
+                    onchange="calculateTotal()" required><br><br>
+
+                <button type="button" class="remove-btn" onclick="this.parentElement.remove(); calculateTotal();">Remove Service</button>
+            `;
+            document.getElementById('servicesList').appendChild(serviceDiv);
+        }
+
+        function calculateTotal() {
+            let total = 0;
+            const services = document.getElementsByClassName('service-entry');
+            for(let i = 0; i < services.length; i++) {
+                const count = parseFloat(services[i].querySelector('input[id^="serviceCount"]').value) || 0;
+                const price = parseFloat(services[i].querySelector('input[id^="servicePrice"]').value) || 0;
+                total += count * price;
+            }
+            document.getElementById('amountDue').value = total.toFixed(2);
+        }
+
+        // Add first service entry by default
+        addService();
+
+        // Check for edit mode
+        window.onload = async function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const editId = urlParams.get('edit');
+            
+            if (editId) {
+                // We're in edit mode
+                try {
+                    const response = await fetch(`/api/invoices/${editId}`);
+                    const invoice = await response.json();
+                    
+                    // Fill form with invoice data
+                    document.getElementById('invoiceNumber').value = invoice.invoiceNumber;
+                    document.getElementById('clientName').value = invoice.clientName;
+                    document.getElementById('clientAddress').value = invoice.clientAddress;
+                    document.getElementById('issueDate').value = invoice.issueDate.split('T')[0];
+                    document.getElementById('amountDue').value = invoice.amountDue;
+                    
+                    // Add update button
+                    const submitButton = document.querySelector('button[type="submit"]');
+                    submitButton.textContent = 'Update Invoice';
+                    submitButton.onclick = (e) => {
+                        e.preventDefault();
+                        updateInvoice(editId);
+                    };
+                } catch (error) {
+                    console.error('Error loading invoice:', error);
+                    alert('Failed to load invoice data');
+                }
+            }
+        };
+
+        async function updateInvoice(id) {
+            const invoiceData = {
+                invoiceNumber: document.getElementById('invoiceNumber').value,
+                clientName: document.getElementById('clientName').value,
+                clientAddress: document.getElementById('clientAddress').value,
+                issueDate: document.getElementById('issueDate').value,
+                amountDue: document.getElementById('amountDue').value
+            };
+
+            try {
+                const response = await fetch(`/api/invoices/${id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(invoiceData)
+                });
+
+                if (response.ok) {
+                    alert('Invoice updated successfully');
+                    window.location.href = '/invoices.html';
+                } else {
+                    const error = await response.json();
+                    alert('Failed to update: ' + error.error);
+                }
+            } catch (error) {
+                console.error('Error updating invoice:', error);
+                alert('Failed to update invoice');
+            }
+        }
+    </script>
+</body>
+</html>
