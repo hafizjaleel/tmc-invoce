@@ -77,12 +77,21 @@ app.get('/api/invoices/recent', async (req, res) => {
     }
 });
 
-// Get single invoice endpoint
+// Get invoice by ID endpoint
 app.get('/api/invoices/:id', async (req, res) => {
     try {
         const db = await connectToMongoDB();
         const { ObjectId } = require('mongodb');
-        const invoice = await db.collection('invoices').findOne({ _id: new ObjectId(req.params.id) });
+        let query;
+        
+        // Check if the id is an ObjectId or invoice number
+        if (ObjectId.isValid(req.params.id)) {
+            query = { _id: new ObjectId(req.params.id) };
+        } else {
+            query = { invoiceNumber: req.params.id };
+        }
+        
+        const invoice = await db.collection('invoices').findOne(query);
         if (!invoice) {
             return res.status(404).json({ error: 'Invoice not found' });
         }

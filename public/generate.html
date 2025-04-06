@@ -177,33 +177,63 @@
 
         // Check for edit mode
         window.onload = async function() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const editId = urlParams.get('edit');
-            
-            if (editId) {
-                // We're in edit mode
-                try {
-                    const response = await fetch(`/api/invoices/${editId}`);
-                    const invoice = await response.json();
-                    
-                    // Fill form with invoice data
-                    document.getElementById('invoiceNumber').value = invoice.invoiceNumber;
-                    document.getElementById('clientName').value = invoice.clientName;
-                    document.getElementById('clientAddress').value = invoice.clientAddress;
-                    document.getElementById('issueDate').value = invoice.issueDate.split('T')[0];
-                    document.getElementById('amountDue').value = invoice.amountDue;
-                    
-                    // Add update button
-                    const submitButton = document.querySelector('button[type="submit"]');
-                    submitButton.textContent = 'Update Invoice';
-                    submitButton.onclick = (e) => {
-                        e.preventDefault();
-                        updateInvoice(editId);
-                    };
-                } catch (error) {
-                    console.error('Error loading invoice:', error);
-                    alert('Failed to load invoice data');
+            // First check localStorage for edit data
+            const editData = localStorage.getItem('editInvoice');
+            if (editData) {
+                const invoice = JSON.parse(editData);
+                
+                // Fill form with invoice data
+                document.getElementById('invoiceNumber').value = invoice.invoiceNumber;
+                document.getElementById('clientName').value = invoice.clientName;
+                document.getElementById('clientAddress').value = invoice.clientAddress;
+                document.getElementById('issueDate').value = new Date(invoice.issueDate).toISOString().split('T')[0];
+                
+                // Clear default service row and reset counter
+                document.getElementById('servicesList').innerHTML = '';
+                serviceCount = 0;  // Reset counter before adding services
+                
+                // Add services
+                if (invoice.services && invoice.services.length > 0) {
+                    invoice.services.forEach(service => {
+                        serviceCount++;
+                        const serviceDiv = document.createElement('div');
+                        serviceDiv.className = 'service-entry';
+                        serviceDiv.innerHTML = `
+                            <h4>Service #${serviceCount}</h4>
+                            <label for="serviceName${serviceCount}">Service Name:</label>
+                            <input type="text" id="serviceName${serviceCount}" name="serviceName${serviceCount}" value="${service.name}" required><br><br>
+                            
+                            <label for="serviceCount${serviceCount}">Count:</label>
+                            <input type="number" id="serviceCount${serviceCount}" name="serviceCount${serviceCount}" 
+                                value="${service.count}" onchange="calculateTotal()" required><br><br>
+                            
+                            <label for="servicePrice${serviceCount}">Price per Unit:</label>
+                            <input type="number" id="servicePrice${serviceCount}" name="servicePrice${serviceCount}" 
+                                value="${service.price}" onchange="calculateTotal()" required><br><br>
+
+                            <button type="button" class="remove-btn" onclick="this.parentElement.remove(); calculateTotal();">Remove Service</button>
+                        `;
+                        document.getElementById('servicesList').appendChild(serviceDiv);
+                    });
+                    calculateTotal();
+                } else {
+                    // Add one empty service row if no services exist
+                    addService();
                 }
+
+                // Update submit button to update mode
+                const submitButton = document.querySelector('button[type="submit"]');
+                submitButton.textContent = 'Update Invoice';
+                submitButton.onclick = (e) => {
+                    e.preventDefault();
+                    updateInvoice(invoice._id);
+                };
+
+                // Clear localStorage
+                localStorage.removeItem('editInvoice');
+            } else {
+                // Add default service row for new invoice
+                addService();
             }
         };
 

@@ -116,8 +116,35 @@
             }
         }
 
-        function openInvoice(invoiceNumber) {
-            window.open(`invoice.html?invoiceNumber=${invoiceNumber}`, '_blank');
+        async function openInvoice(invoiceNumber) {
+            try {
+                const response = await fetch(`/api/invoices/${invoiceNumber}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const invoice = await response.json();
+                
+                const params = new URLSearchParams({
+                    invoiceNumber: invoice.invoiceNumber,
+                    clientName: invoice.clientName,
+                    clientAddress: invoice.clientAddress,
+                    issueDate: invoice.issueDate,
+                    amountDue: invoice.amountDue
+                });
+
+                if (invoice.services && Array.isArray(invoice.services)) {
+                    invoice.services.forEach((service, index) => {
+                        params.append(`serviceName${index + 1}`, service.name);
+                        params.append(`serviceCount${index + 1}`, service.count);
+                        params.append(`servicePrice${index + 1}`, service.price);
+                    });
+                }
+
+                window.open(`invoice.html?${params.toString()}`, '_blank');
+            } catch (error) {
+                console.error('Error opening invoice:', error);
+                alert('Failed to load invoice. Please try again.');
+            }
         }
 
         // Load recent bills when page loads

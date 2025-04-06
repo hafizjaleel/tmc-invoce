@@ -167,6 +167,19 @@
         
         // Function to save invoice data using fetch API
         async function saveInvoiceData() {
+            const invoiceNumber = urlParams.get('invoiceNumber');
+            
+            // Check if invoice already exists
+            try {
+                const checkResponse = await fetch(`/api/invoices/${invoiceNumber}`);
+                if (checkResponse.ok) {
+                    // Invoice already exists, no need to save
+                    return;
+                }
+            } catch (error) {
+                console.error('Error checking invoice:', error);
+            }
+
             const services = [];
             let serviceIndex = 1;
             while (urlParams.get(`serviceName${serviceIndex}`)) {
@@ -179,7 +192,7 @@
             }
 
             const invoiceData = {
-                invoiceNumber: urlParams.get('invoiceNumber'),
+                invoiceNumber: invoiceNumber,
                 clientName: urlParams.get('clientName'),
                 clientAddress: urlParams.get('clientAddress'),
                 issueDate: urlParams.get('issueDate'),

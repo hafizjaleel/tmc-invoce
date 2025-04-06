@@ -46,6 +46,9 @@
             color: white;
             transition: 0.3s;
         }
+        .home-btn {
+            background-color: #27ae60 !important;
+        }
         .action-buttons {
             display: flex;
             gap: 10px;
@@ -76,6 +79,32 @@
             text-align: center;
             margin-bottom: 30px;
         }
+        .suggestions {
+            position: absolute;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            width: calc(100% - 20px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            z-index: 1000;
+            display: none;
+        }
+        
+        .suggestion-item {
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+        
+        .suggestion-item:hover {
+            background-color: #f5f5f5;
+        }
+
+        .search-input-container {
+            position: relative;
+            flex: 1;
+        }
     </style>
 </head>
 <body>
@@ -84,8 +113,12 @@
         
         <div class="search-container">
             <input type="text" id="invoiceSearch" placeholder="Invoice Number">
-            <input type="text" id="clientSearch" placeholder="Client Name">
+            <div class="search-input-container">
+                <input type="text" id="clientSearch" placeholder="Client Name" oninput="showSuggestions(this.value)">
+                <div id="suggestions" class="suggestions"></div>
+            </div>
             <button onclick="searchInvoices()">Search</button>
+            <button class="home-btn" onclick="window.location.href='/'">Home</button>
         </div>
 
         <div id="invoices"></div>
@@ -122,7 +155,7 @@
                     <p>Date: ${new Date(invoice.issueDate).toLocaleDateString()}</p>
                     <p>Amount: ₹${invoice.amountDue}</p>
                     <div class="action-buttons">
-                        <button class="print-btn" onclick="openInvoice('${invoice.invoiceNumber}', '${invoice.clientName}', '${invoice.clientAddress}', '${invoice.issueDate}', '${invoice.amountDue}')">Print</button>
+                        <button class="print-btn" onclick="openInvoice('${invoice.invoiceNumber}')">Print</button>
                         <button class="edit-btn" onclick="editInvoice('${invoice._id}')">Edit</button>
                         <button class="delete-btn" onclick="deleteInvoice('${invoice._id}')">Delete</button>
                     </div>
@@ -155,12 +188,24 @@
         async function editInvoice(id) {
             try {
                 const response = await fetch(`/api/invoices/${id}`);
-                if (response.ok) {
-                    const invoice = await response.json();
-                    // Store invoice data in localStorage for create-invoice page
-                    localStorage.setItem('editInvoice', JSON.stringify(invoice));
-                    window.location.href = `/create-invoice?edit=${id}`;
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
+                const invoice = await response.json();
+                
+                // Store complete invoice data
+                const editData = {
+                    _id: invoice._id,
+                    invoiceNumber: invoice.invoiceNumber,
+                    clientName: invoice.clientName,
+                    clientAddress: invoice.clientAddress,
+                    issueDate: invoice.issueDate,
+                    services: invoice.services || [],
+                    amountDue: invoice.amountDue
+                };
+                
+                localStorage.setItem('editInvoice', JSON.stringify(editData));
+                window.location.href = '/create-invoice';
             } catch (error) {
                 console.error('Error fetching invoice:', error);
                 alert('Failed to fetch invoice details');
@@ -177,16 +222,85 @@
             }
         }
 
-        function openInvoice(invoiceNumber, clientName, clientAddress, issueDate, amountDue) {
-            const params = new URLSearchParams({
-                invoiceNumber,
-                clientName,
-                clientAddress,
-                issueDate,
-                amountDue
-            });
-            window.open(`invoice.html?${params}`, '_blank');
+        async function openInvoice(invoiceNumber) {
+            try {
+                const response = await fetch(`/api/invoices/${invoiceNumber}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const invoice = await response.json();
+                
+                const params = new URLSearchParams({
+                    invoiceNumber: invoice.invoiceNumber,
+                    clientName: invoice.clientName,
+                    clientAddress: invoice.clientAddress,
+                    issueDate: invoice.issueDate,
+                    amountDue: invoice.amountDue
+                });
+
+                if (invoice.services && Array.isArray(invoice.services)) {
+                    invoice.services.forEach((service, index) => {
+                        params.append(`serviceName${index + 1}`, service.name);
+                        params.append(`serviceCount${index + 1}`, service.count);
+                        params.append(`servicePrice${index + 1}`, service.price);
+                    });
+                }
+
+                window.open(`invoice.html?${params.toString()}`, '_blank');
+            } catch (error) {
+                console.error('Error opening invoice:', error);
+                alert('Failed to load invoice. Please try again.');
+            }
         }
+
+        async function showSuggestions(searchText) {
+            if (!searchText) {
+                document.getElementById('suggestions').style.display = 'none';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/invoices');
+                const invoices = await response.json();
+                
+                // Get unique client names
+                const clientNames = [...new Set(invoices.map(invoice => invoice.clientName))];
+                
+                // Filter matches
+                const matches = clientNames.filter(name => 
+                    name.toLowerCase().includes(searchText.toLowerCase())
+                );
+
+                const suggestionsDiv = document.getElementById('suggestions');
+                suggestionsDiv.innerHTML = '';
+                
+                if (matches.length > 0) {
+                    matches.forEach(name => {
+                        const div = document.createElement('div');
+                        div.className = 'suggestion-item';
+                        div.textContent = name;
+                        div.onclick = () => {
+                            document.getElementById('clientSearch').value = name;
+                            suggestionsDiv.style.display = 'none';
+                            searchInvoices();
+                        };
+                        suggestionsDiv.appendChild(div);
+                    });
+                    suggestionsDiv.style.display = 'block';
+                } else {
+                    suggestionsDiv.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Error fetching suggestions:', error);
+            }
+        }
+
+        // Close suggestions when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.matches('#clientSearch')) {
+                document.getElementById('suggestions').style.display = 'none';
+            }
+        });
 
         // Update window.onload
         window.onload = loadInvoices;
