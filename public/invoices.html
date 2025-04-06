@@ -49,6 +49,10 @@
         .home-btn {
             background-color: #27ae60 !important;
         }
+        .home-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
         .action-buttons {
             display: flex;
             gap: 10px;
@@ -110,6 +114,9 @@
 <body>
     <div class="invoice-list">
         <h1>Saved Invoices</h1>
+        <div class="home-container">
+            <button class="home-btn" onclick="window.location.href='/'">Home</button>
+        </div>
         
         <div class="search-container">
             <input type="text" id="invoiceSearch" placeholder="Invoice Number">
@@ -117,28 +124,65 @@
                 <input type="text" id="clientSearch" placeholder="Client Name" oninput="showSuggestions(this.value)">
                 <div id="suggestions" class="suggestions"></div>
             </div>
+            <input type="date" id="startDate">
+            <input type="date" id="endDate">
             <button onclick="searchInvoices()">Search</button>
-            <button class="home-btn" onclick="window.location.href='/'">Home</button>
+            <button onclick="toggleSort()" id="sortBtn">Sort</button>
         </div>
 
         <div id="invoices"></div>
     </div>
 
     <script>
+        let currentInvoices = [];
+        let isAscending = true;
+
+        function toggleSort() {
+            isAscending = !isAscending;
+            document.getElementById('sortBtn').innerHTML = `Sort ${isAscending ? '↓' : '↑'}`;
+            sortAndDisplayInvoices();
+        }
+
+        function sortAndDisplayInvoices() {
+            const sortedInvoices = [...currentInvoices].sort((a, b) => {
+                const dateA = new Date(a.issueDate);
+                const dateB = new Date(b.issueDate);
+                return isAscending ? dateA - dateB : dateB - dateA;
+            });
+            displayInvoices(sortedInvoices);
+        }
+
         async function searchInvoices() {
             const invoiceNumber = document.getElementById('invoiceSearch').value;
             const clientName = document.getElementById('clientSearch').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+
+            // Date validation
+            if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
+                alert('Start date cannot be after end date');
+                return;
+            }
             
             try {
                 const params = new URLSearchParams();
                 if (invoiceNumber) params.append('invoiceNumber', invoiceNumber);
                 if (clientName) params.append('clientName', clientName);
+                if (startDate) params.append('startDate', startDate);
+                if (endDate) params.append('endDate', endDate);
                 
                 const response = await fetch(`/api/invoices/search?${params}`);
+                if (!response.ok) throw new Error('Search failed');
+                
                 const invoices = await response.json();
-                displayInvoices(invoices);
+                if (invoices.length === 0) {
+                    alert('No invoices found for the specified criteria');
+                }
+                currentInvoices = invoices;
+                sortAndDisplayInvoices();
             } catch (error) {
                 console.error('Error searching invoices:', error);
+                alert('Error searching invoices: ' + error.message);
             }
         }
 
@@ -147,12 +191,17 @@
             container.innerHTML = '';
             
             invoices.forEach(invoice => {
+                const date = new Date(invoice.issueDate);
+                const formattedDate = date.getDate().toString().padStart(2, '0') + '/' +
+                                    (date.getMonth() + 1).toString().padStart(2, '0') + '/' +
+                                    date.getFullYear();
+                
                 const div = document.createElement('div');
                 div.className = 'invoice-item';
                 div.innerHTML = `
                     <h3>Invoice #${invoice.invoiceNumber}</h3>
                     <p>Client: ${invoice.clientName}</p>
-                    <p>Date: ${new Date(invoice.issueDate).toLocaleDateString()}</p>
+                    <p>Date: ${formattedDate}</p>
                     <p>Amount: ₹${invoice.amountDue}</p>
                     <div class="action-buttons">
                         <button class="print-btn" onclick="openInvoice('${invoice.invoiceNumber}')">Print</button>
@@ -216,7 +265,8 @@
             try {
                 const response = await fetch('/api/invoices');
                 const invoices = await response.json();
-                displayInvoices(invoices);
+                currentInvoices = invoices; // Store the current invoices
+                sortAndDisplayInvoices(); // Use sort function instead of direct display
             } catch (error) {
                 console.error('Error loading invoices:', error);
             }

@@ -45,7 +45,7 @@ app.get('/api/invoices', async (req, res) => {
 app.get('/api/invoices/search', async (req, res) => {
     try {
         const db = await connectToMongoDB();
-        const { invoiceNumber, clientName } = req.query;
+        const { invoiceNumber, clientName, startDate, endDate } = req.query;
         
         let query = {};
         if (invoiceNumber) {
@@ -54,10 +54,31 @@ app.get('/api/invoices/search', async (req, res) => {
         if (clientName) {
             query.clientName = new RegExp(clientName, 'i');
         }
-        
-        const invoices = await db.collection('invoices').find(query).toArray();
+        if (startDate || endDate) {
+            query.issueDate = {};
+            if (startDate) {
+                const start = new Date(startDate);
+                start.setHours(0, 0, 0, 0);
+                query.issueDate.$gte = start.toISOString();
+            }
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                query.issueDate.$lte = end.toISOString();
+            }
+        }
+
+        console.log('Query:', query); // For debugging
+
+        const invoices = await db.collection('invoices')
+            .find(query)
+            .sort({ issueDate: -1 })
+            .toArray();
+
+        console.log('Found invoices:', invoices.length); // For debugging
         res.json(invoices);
     } catch (error) {
+        console.error('Search error:', error);
         res.status(500).json({ error: error.message });
     }
 });

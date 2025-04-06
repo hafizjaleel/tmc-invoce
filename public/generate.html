@@ -106,7 +106,8 @@
 
             <div class="form-group">
                 <label for="clientName">Client Name:</label>
-                <input type="text" id="clientName" name="clientName" required>
+                <input type="text" id="clientName" name="clientName" list="clientList" required>
+                <datalist id="clientList"></datalist>
             </div>
 
             <div class="form-group">
@@ -138,6 +139,46 @@
 
     <script>
         let serviceCount = 0;
+        let clients = new Map(); // Store client data
+
+        // Fetch existing clients
+        async function fetchClients() {
+            try {
+                const response = await fetch('/api/invoices');
+                const invoices = await response.json();
+                
+                // Create unique client map
+                invoices.forEach(invoice => {
+                    if (invoice.clientName && invoice.clientAddress) {
+                        clients.set(invoice.clientName, invoice.clientAddress);
+                    }
+                });
+
+                // Populate datalist
+                const clientList = document.getElementById('clientList');
+                clients.forEach((_, clientName) => {
+                    const option = document.createElement('option');
+                    option.value = clientName;
+                    clientList.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error fetching clients:', error);
+            }
+        }
+
+        // Auto-fill client address
+        document.getElementById('clientName').addEventListener('input', function(e) {
+            const address = clients.get(this.value);
+            if (address) {
+                document.getElementById('clientAddress').value = address;
+            }
+        });
+
+        // Set current date on load
+        function setCurrentDate() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('issueDate').value = today;
+        }
 
         function addService() {
             serviceCount++;
@@ -175,8 +216,11 @@
         // Add first service entry by default
         addService();
 
-        // Check for edit mode
+        // Modified window.onload
         window.onload = async function() {
+            await fetchClients();
+            setCurrentDate();
+
             // First check localStorage for edit data
             const editData = localStorage.getItem('editInvoice');
             if (editData) {
