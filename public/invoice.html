@@ -46,16 +46,17 @@
         .client-name { 
             top: 240px; 
             left: 100px;
-            font-size: 15px;
+            font-size: 18px;
             font-weight: 600;
             color: #000000;
         }
         .client-address { 
-            top: 260px; 
+            top: 262px; 
             left: 100px;
             white-space: pre-line;
             color: #000000;
             line-height: 1.4;
+            font-size: 13px;
         }
         .issue-date { 
             top: 227px; 
@@ -68,6 +69,57 @@
             font-weight: bold;
             font-size: 16px;
             color: #000000;
+        }
+        .total-balance { 
+            font-size: 16px;
+            color: #000000;
+            font-weight: bold;
+            top: 250px;
+            left: 610px;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 5px;
+            width: 300px;
+            text-align: center;
+            position: relative;
+        }
+        .modal-content input {
+            width: 90%;
+            padding: 8px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .modal-content button {
+            position: static;
+            margin: 5px;
+            padding: 8px 15px;
+            width: 45%;
+            display: inline-block;
+        }
+        .modal-close {
+            position: absolute;
+            right: 10px;
+            top: 5px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+        }
+        .modal-close:hover {
+            color: #000;
         }
         .services-table { 
             top: 380px; 
@@ -137,6 +189,13 @@
         .home-btn:hover {
             background-color: #219a52;
         }
+        .save-btn {
+            right: 440px;
+            background-color: #f39c12;
+        }
+        .save-btn:hover {
+            background-color: #d68910;
+        }
         @media print {
             body { padding: 0; background-color: white; }
             button { display: none; }
@@ -154,10 +213,24 @@
         <div class="field issue-date" id="issueDateField"></div>
         <table class="field services-table" id="servicesTableField"></table>
         <div class="field amount-due" id="amountDueField"></div>
+        <div class="field total-balance" id="totalBalanceField"></div>
+    </div>
+    <div id="balanceModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeBalanceModal()">&times;</span>
+            <h3>Enter Previous Balance</h3>
+            <input type="number" id="oldBalanceInput" placeholder="Enter amount">
+            <div>
+                <button onclick="addOldBalance()" style="background-color: #27ae60;">Add</button>
+                <button onclick="closeBalanceModal()" style="background-color: #e74c3c;">Cancel</button>
+            </div>
+        </div>
     </div>
     <button onclick="generatePDF()">Print Invoice</button>
+    <button onclick="saveOnly()" class="save-btn">Save Invoice</button>
     <button onclick="viewInvoices()" style="right: 160px;">View Invoices</button>
     <button onclick="goHome()" class="home-btn">Home</button>
+    <button onclick="openBalanceModal()" style="right: 580px; background-color: #e74c3c;">Add Old Balance</button>
     <script>
         function goHome() {
             window.location.href = '/';
@@ -173,8 +246,7 @@
             try {
                 const checkResponse = await fetch(`/api/invoices/${invoiceNumber}`);
                 if (checkResponse.ok) {
-                    // Invoice already exists, no need to save
-                    return;
+                    return { exists: true };
                 }
             } catch (error) {
                 console.error('Error checking invoice:', error);
@@ -201,17 +273,29 @@
             };
 
             try {
-                const response = await fetch('/api/invoices', {
+                const invoiceResponse = await fetch('/api/invoices', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify(invoiceData)
                 });
-                const result = await response.json();
-                console.log('Invoice saved:', result);
+
+                return { exists: false, result: await invoiceResponse.json() };
             } catch (error) {
-                console.error('Error saving invoice:', error);
+                console.error('Error saving data:', error);
+                return { error: true };
+            }
+        }
+
+        async function saveOnly() {
+            const result = await saveInvoiceData();
+            if (result.exists) {
+                alert('Invoice already exists');
+            } else if (result.error) {
+                alert('Error saving invoice');
+            } else {
+                alert('Invoice saved successfully!');
             }
         }
 
@@ -219,36 +303,117 @@
             window.location.href = '/invoices.html';
         }
 
-        // Populate basic fields
-        document.getElementById('invoiceNumberField').textContent = `#${urlParams.get('invoiceNumber')}`;
-        document.getElementById('clientNameField').textContent = urlParams.get('clientName');
-        document.getElementById('clientAddressField').textContent = urlParams.get('clientAddress');
-        document.getElementById('issueDateField').textContent = new Date(urlParams.get('issueDate')).toLocaleDateString();
-        document.getElementById('amountDueField').textContent = `₹${urlParams.get('amountDue')}`;
+        // Add this new function to load existing invoice data
+        async function loadInvoiceData(invoiceNumber) {
+            try {
+                const response = await fetch(`/api/invoices/${invoiceNumber}`);
+                if (!response.ok) {
+                    throw new Error('Invoice not found');
+                }
+                const invoice = await response.json();
+                
+                // Update URL parameters with invoice data
+                const params = new URLSearchParams(window.location.search);
+                params.set('invoiceNumber', invoice.invoiceNumber);
+                params.set('clientName', invoice.clientName);
+                params.set('clientAddress', invoice.clientAddress);
+                params.set('issueDate', new Date(invoice.issueDate).toISOString().split('T')[0]);
+                params.set('amountDue', invoice.totalAmount || invoice.amountDue);
 
-        // Create services table
-        const servicesTable = document.getElementById('servicesTableField');
-        let tableHTML = '';
+                // Add services to params
+                if (invoice.services) {
+                    invoice.services.forEach((service, index) => {
+                        params.set(`serviceName${index + 1}`, service.name);
+                        params.set(`serviceCount${index + 1}`, service.count);
+                        params.set(`servicePrice${index + 1}`, service.price);
+                    });
+                }
 
-        let serviceIndex = 1;
-        while (urlParams.get(`serviceName${serviceIndex}`)) {
-            const name = urlParams.get(`serviceName${serviceIndex}`);
-            const count = urlParams.get(`serviceCount${serviceIndex}`);
-            const price = urlParams.get(`servicePrice${serviceIndex}`);
-            const total = parseFloat(count) * parseFloat(price);
-
-            tableHTML += `
-                <tr>
-                    <td>${serviceIndex}.</td>
-                    <td>${name}</td>
-                    <td>${count}</td>
-                    <td>₹ ${parseFloat(price).toFixed(2)}</td>
-                    <td>₹ ${total.toFixed(2)}</td>
-                </tr>
-            `;
-            serviceIndex++;
+                // Update URL without reloading
+                window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+                
+                // Now populate the fields
+                populateFields();
+            } catch (error) {
+                console.error('Error loading invoice:', error);
+                alert('Failed to load invoice data');
+            }
         }
-        servicesTable.innerHTML = tableHTML;
+
+        function populateFields() {
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            // Populate basic fields
+            document.getElementById('invoiceNumberField').textContent = `#${urlParams.get('invoiceNumber')}`;
+            document.getElementById('clientNameField').textContent = urlParams.get('clientName');
+            document.getElementById('clientAddressField').textContent = urlParams.get('clientAddress');
+            document.getElementById('issueDateField').textContent = new Date(urlParams.get('issueDate')).toLocaleDateString();
+            document.getElementById('amountDueField').textContent = `₹${urlParams.get('amountDue')}`;
+
+            // Create services table
+            const servicesTable = document.getElementById('servicesTableField');
+            let tableHTML = '';
+
+            let serviceIndex = 1;
+            while (urlParams.get(`serviceName${serviceIndex}`)) {
+                const name = urlParams.get(`serviceName${serviceIndex}`);
+                const count = urlParams.get(`serviceCount${serviceIndex}`);
+                const price = urlParams.get(`servicePrice${serviceIndex}`);
+                const total = parseFloat(count) * parseFloat(price);
+
+                tableHTML += `
+                    <tr>
+                        <td>${serviceIndex}.</td>
+                        <td>${name}</td>
+                        <td>${count}</td>
+                        <td>₹ ${parseFloat(price).toFixed(2)}</td>
+                        <td>₹ ${total.toFixed(2)}</td>
+                    </tr>
+                `;
+                serviceIndex++;
+            }
+            servicesTable.innerHTML = tableHTML;
+
+            const oldBalance = parseFloat(urlParams.get('oldBalance')) || 0;
+            const invoiceAmount = parseFloat(urlParams.get('amountDue')) || 0;
+            
+            if (oldBalance > 0) {
+                document.getElementById('totalBalanceField').textContent = `₹${(oldBalance + invoiceAmount).toFixed(2)}`;
+            }
+        }
+
+        function openBalanceModal() {
+            document.getElementById('balanceModal').style.display = 'block';
+        }
+
+        function closeBalanceModal() {
+            document.getElementById('balanceModal').style.display = 'none';
+            document.getElementById('oldBalanceInput').value = '';
+        }
+
+        function addOldBalance() {
+            const oldBalance = parseFloat(document.getElementById('oldBalanceInput').value) || 0;
+            const invoiceAmount = parseFloat(urlParams.get('amountDue')) || 0;
+            const totalBalance = oldBalance + invoiceAmount;
+
+            urlParams.set('oldBalance', oldBalance.toString());
+            window.history.replaceState({}, '', `${window.location.pathname}?${urlParams.toString()}`);
+
+            document.getElementById('totalBalanceField').textContent = `₹${totalBalance.toFixed(2)}`;
+            
+            closeBalanceModal();
+        }
+
+        // Modify the initialization code
+        const invoiceNumber = urlParams.get('invoiceNumber');
+
+        // If we have only invoice number, load the full data
+        if (invoiceNumber && !urlParams.get('clientName')) {
+            loadInvoiceData(invoiceNumber);
+        } else {
+            // For new invoices or already loaded data
+            populateFields();
+        }
 
         function generatePDF() {
             // Save invoice data before generating PDF

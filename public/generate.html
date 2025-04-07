@@ -57,6 +57,30 @@
             box-sizing: border-box;
         }
 
+        select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background-color: white;
+            font-size: 1em;
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            background-size: 1em;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: var(--secondary-color);
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+        }
+
+        select option {
+            padding: 8px;
+        }
+
         .service-entry {
             background-color: #f8f9fa;
             border: 1px solid var(--border-color);
@@ -106,13 +130,14 @@
 
             <div class="form-group">
                 <label for="clientName">Client Name:</label>
-                <input type="text" id="clientName" name="clientName" list="clientList" required>
-                <datalist id="clientList"></datalist>
+                <select id="clientName" name="clientName" required onchange="updateClientAddress()">
+                    <option value="">Select Client</option>
+                </select>
             </div>
 
             <div class="form-group">
                 <label for="clientAddress">Client Address:</label>
-                <textarea id="clientAddress" name="clientAddress" rows="3" required></textarea>
+                <textarea id="clientAddress" name="clientAddress" rows="3" readonly required></textarea>
             </div>
 
             <div class="form-group">
@@ -140,44 +165,76 @@
     <script>
         let serviceCount = 0;
         let clients = new Map(); // Store client data
+        let services = new Map(); // Store service data
 
         // Fetch existing clients
         async function fetchClients() {
             try {
-                const response = await fetch('/api/invoices');
-                const invoices = await response.json();
+                const response = await fetch('/api/clients');
+                const clientList = await response.json();
                 
-                // Create unique client map
-                invoices.forEach(invoice => {
-                    if (invoice.clientName && invoice.clientAddress) {
-                        clients.set(invoice.clientName, invoice.clientAddress);
+                // Populate select element
+                const clientSelect = document.getElementById('clientName');
+                clientSelect.innerHTML = `
+                    <option value="" disabled selected>Choose a client...</option>
+                    ${Array.from(clientList).map(client => 
+                        client.name && client.address ? 
+                        `<option value="${client.name}">${client.name}</option>` : 
+                        ''
+                    ).join('')}
+                `;
+                
+                // Create client map for address lookup
+                clients = new Map();
+                clientList.forEach(client => {
+                    if (client.name && client.address) {
+                        clients.set(client.name, client);
                     }
-                });
-
-                // Populate datalist
-                const clientList = document.getElementById('clientList');
-                clients.forEach((_, clientName) => {
-                    const option = document.createElement('option');
-                    option.value = clientName;
-                    clientList.appendChild(option);
                 });
             } catch (error) {
                 console.error('Error fetching clients:', error);
             }
         }
 
-        // Auto-fill client address
-        document.getElementById('clientName').addEventListener('input', function(e) {
-            const address = clients.get(this.value);
-            if (address) {
-                document.getElementById('clientAddress').value = address;
+        // Fetch existing services
+        async function fetchServices() {
+            try {
+                const response = await fetch('/api/services');
+                const serviceList = await response.json();
+                services = new Map();
+                serviceList.forEach(service => {
+                    if (service.name && service.rate) {
+                        services.set(service.name, service);
+                    }
+                });
+                // Add a service entry after fetching services
+                if (serviceCount === 0) {
+                    addService();
+                }
+            } catch (error) {
+                console.error('Error fetching services:', error);
             }
-        });
+        }
+
+        // Auto-fill client address
+        function updateClientAddress() {
+            const selectedClient = clients.get(document.getElementById('clientName').value);
+            document.getElementById('clientAddress').value = selectedClient ? selectedClient.address : '';
+        }
 
         // Set current date on load
         function setCurrentDate() {
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('issueDate').value = today;
+        }
+
+        function updateServicePrice(serviceId) {
+            const selectedService = services.get(document.getElementById(`serviceName${serviceId}`).value);
+            if (selectedService) {
+                // Set initial price but allow editing
+                document.getElementById(`servicePrice${serviceId}`).value = selectedService.rate;
+                calculateTotal();
+            }
         }
 
         function addService() {
@@ -187,7 +244,13 @@
             serviceDiv.innerHTML = `
                 <h4>Service #${serviceCount}</h4>
                 <label for="serviceName${serviceCount}">Service Name:</label>
-                <input type="text" id="serviceName${serviceCount}" name="serviceName${serviceCount}" required><br><br>
+                <select id="serviceName${serviceCount}" name="serviceName${serviceCount}" 
+                    onchange="updateServicePrice(${serviceCount})" required>
+                    <option value="" disabled selected>Choose a service...</option>
+                    ${Array.from(services.values()).map(service => 
+                        `<option value="${service.name}">${service.name}</option>`
+                    ).join('')}
+                </select><br><br>
                 
                 <label for="serviceCount${serviceCount}">Count:</label>
                 <input type="number" id="serviceCount${serviceCount}" name="serviceCount${serviceCount}" 
@@ -195,7 +258,7 @@
                 
                 <label for="servicePrice${serviceCount}">Price per Unit:</label>
                 <input type="number" id="servicePrice${serviceCount}" name="servicePrice${serviceCount}" 
-                    onchange="calculateTotal()" required><br><br>
+                    onchange="calculateTotal()" step="0.01" required><br><br>
 
                 <button type="button" class="remove-btn" onclick="this.parentElement.remove(); calculateTotal();">Remove Service</button>
             `;
@@ -213,13 +276,35 @@
             document.getElementById('amountDue').value = total.toFixed(2);
         }
 
-        // Add first service entry by default
-        addService();
-
-        // Modified window.onload
         window.onload = async function() {
-            await fetchClients();
+            await Promise.all([fetchClients(), fetchServices()]);
             setCurrentDate();
+
+            // Add form submit handler
+            document.getElementById('invoiceForm').onsubmit = async function(e) {
+                e.preventDefault();
+                
+                const invoiceNumber = document.getElementById('invoiceNumber').value;
+                const editData = localStorage.getItem('editInvoice');
+
+                // Only check for duplicates if this is a new invoice
+                if (!editData) {
+                    try {
+                        const response = await fetch(`/api/invoices/check/${invoiceNumber}`);
+                        const data = await response.json();
+                        
+                        if (data.exists) {
+                            alert('This invoice number already exists. Please use a different number.');
+                            return;
+                        }
+                    } catch (error) {
+                        console.error('Error checking invoice number:', error);
+                    }
+                }
+
+                // If no duplicate or editing existing invoice, proceed to invoice.html
+                window.location.href = 'invoice.html?' + new URLSearchParams(new FormData(this));
+            };
 
             // First check localStorage for edit data
             const editData = localStorage.getItem('editInvoice');
@@ -245,7 +330,13 @@
                         serviceDiv.innerHTML = `
                             <h4>Service #${serviceCount}</h4>
                             <label for="serviceName${serviceCount}">Service Name:</label>
-                            <input type="text" id="serviceName${serviceCount}" name="serviceName${serviceCount}" value="${service.name}" required><br><br>
+                            <select id="serviceName${serviceCount}" name="serviceName${serviceCount}" 
+                                onchange="updateServicePrice(${serviceCount})" required>
+                                <option value="" disabled>Choose a service...</option>
+                                ${Array.from(services.values()).map(s => 
+                                    `<option value="${s.name}" ${s.name === service.name ? 'selected' : ''}>${s.name}</option>`
+                                ).join('')}
+                            </select><br><br>
                             
                             <label for="serviceCount${serviceCount}">Count:</label>
                             <input type="number" id="serviceCount${serviceCount}" name="serviceCount${serviceCount}" 
@@ -253,7 +344,7 @@
                             
                             <label for="servicePrice${serviceCount}">Price per Unit:</label>
                             <input type="number" id="servicePrice${serviceCount}" name="servicePrice${serviceCount}" 
-                                value="${service.price}" onchange="calculateTotal()" required><br><br>
+                                value="${service.price}" onchange="calculateTotal()" step="0.01" required><br><br>
 
                             <button type="button" class="remove-btn" onclick="this.parentElement.remove(); calculateTotal();">Remove Service</button>
                         `;
