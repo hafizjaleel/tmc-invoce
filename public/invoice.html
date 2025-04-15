@@ -257,8 +257,8 @@
             while (urlParams.get(`serviceName${serviceIndex}`)) {
                 services.push({
                     name: urlParams.get(`serviceName${serviceIndex}`),
-                    count: urlParams.get(`serviceCount${serviceIndex}`),
-                    price: urlParams.get(`servicePrice${serviceIndex}`)
+                    count: parseInt(urlParams.get(`serviceCount${serviceIndex}`)),
+                    price: parseFloat(urlParams.get(`servicePrice${serviceIndex}`))
                 });
                 serviceIndex++;
             }
@@ -312,8 +312,10 @@
                 }
                 const invoice = await response.json();
                 
-                // Update URL parameters with invoice data
-                const params = new URLSearchParams(window.location.search);
+                // Clear existing URL parameters
+                const params = new URLSearchParams();
+                
+                // Add basic invoice data
                 params.set('invoiceNumber', invoice.invoiceNumber);
                 params.set('clientName', invoice.clientName);
                 params.set('clientAddress', invoice.clientAddress);
@@ -321,11 +323,12 @@
                 params.set('amountDue', invoice.totalAmount || invoice.amountDue);
 
                 // Add services to params
-                if (invoice.services) {
+                if (invoice.services && Array.isArray(invoice.services)) {
                     invoice.services.forEach((service, index) => {
-                        params.set(`serviceName${index + 1}`, service.name);
-                        params.set(`serviceCount${index + 1}`, service.count);
-                        params.set(`servicePrice${index + 1}`, service.price);
+                        const serviceId = index + 1;
+                        params.set(`serviceName${serviceId}`, service.name);
+                        params.set(`serviceCount${serviceId}`, service.count);
+                        params.set(`servicePrice${serviceId}`, service.price);
                     });
                 }
 

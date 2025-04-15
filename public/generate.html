@@ -141,6 +141,43 @@
         .remove-btn:hover {
             background-color: #c0392b;
         }
+
+        /* Add new styles for modals */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 500px;
+        }
+
+        .close-modal {
+            float: right;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .suggestions-container {
+            position: relative;
+        }
+
+        .suggestions-list {
+            position: absolute;
+            width: 100%;
+            z-index: 100;
+        }
     </style>
 </head>
 <body>
@@ -154,9 +191,10 @@
 
             <div class="form-group">
                 <label for="clientName">Client Name:</label>
-                <select id="clientName" name="clientName" required onchange="updateClientAddress()">
-                    <option value="">Select Client</option>
-                </select>
+                <div class="suggestions-container">
+                    <input type="text" id="clientName" name="clientName" required onkeyup="showClientSuggestions()">
+                    <div id="clientSuggestions" class="suggestions-list" style="display:none;"></div>
+                </div>
             </div>
 
             <div class="form-group">
@@ -186,10 +224,45 @@
         </form>
     </div>
 
+    <!-- Add Client Modal -->
+    <div id="addClientModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal('addClientModal')">&times;</span>
+            <h2>Add New Client</h2>
+            <div class="form-group">
+                <label for="newClientName">Client Name:</label>
+                <input type="text" id="newClientName" required>
+            </div>
+            <div class="form-group">
+                <label for="newClientAddress">Client Address:</label>
+                <textarea id="newClientAddress" rows="3" required></textarea>
+            </div>
+            <button type="button" onclick="saveNewClient()">Save Client</button>
+        </div>
+    </div>
+
+    <!-- Add Service Modal -->
+    <div id="addServiceModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal('addServiceModal')">&times;</span>
+            <h2>Add New Service</h2>
+            <div class="form-group">
+                <label for="newServiceName">Service Name:</label>
+                <input type="text" id="newServiceName" required>
+            </div>
+            <div class="form-group">
+                <label for="newServiceRate">Rate:</label>
+                <input type="number" id="newServiceRate" step="0.01" required>
+            </div>
+            <button type="button" onclick="saveNewService()">Save Service</button>
+        </div>
+    </div>
+
     <script>
         let serviceCount = 0;
         let clients = new Map(); // Store client data
         let services = new Map(); // Store service data
+        let currentServiceId = null;
 
         // Fetch existing clients
         async function fetchClients() {
@@ -268,14 +341,14 @@
             serviceDiv.innerHTML = `
                 <h4>Service #${serviceCount}</h4>
                 <label for="serviceName${serviceCount}">Service Name:</label>
-                <textarea 
-                    id="serviceName${serviceCount}" 
-                    name="serviceName${serviceCount}" 
-                    class="service-name-input"
-                    oninput="showSuggestions(${serviceCount})"
-                    required
-                ></textarea>
-                <div id="suggestions${serviceCount}" class="suggestions-list" style="display:none;"></div>
+                <div class="suggestions-container">
+                    <input type="text" 
+                        id="serviceName${serviceCount}" 
+                        name="serviceName${serviceCount}" 
+                        oninput="showServiceSuggestions(${serviceCount})"
+                        required>
+                    <div id="serviceSuggestions${serviceCount}" class="suggestions-list" style="display:none;"></div>
+                </div>
                 <br><br>
                 
                 <label for="serviceCount${serviceCount}">Count:</label>
@@ -387,13 +460,16 @@
                         serviceDiv.innerHTML = `
                             <h4>Service #${serviceCount}</h4>
                             <label for="serviceName${serviceCount}">Service Name:</label>
-                            <select id="serviceName${serviceCount}" name="serviceName${serviceCount}" 
-                                onchange="updateServicePrice(${serviceCount})" required>
-                                <option value="" disabled>Choose a service...</option>
-                                ${Array.from(services.values()).map(s => 
-                                    `<option value="${s.name}" ${s.name === service.name ? 'selected' : ''}>${s.name}</option>`
-                                ).join('')}
-                            </select><br><br>
+                            <div class="suggestions-container">
+                                <input type="text" 
+                                    id="serviceName${serviceCount}" 
+                                    name="serviceName${serviceCount}" 
+                                    value="${service.name}"
+                                    oninput="showServiceSuggestions(${serviceCount})"
+                                    required>
+                                <div id="serviceSuggestions${serviceCount}" class="suggestions-list" style="display:none;"></div>
+                            </div>
+                            <br><br>
                             
                             <label for="serviceCount${serviceCount}">Count:</label>
                             <input type="number" id="serviceCount${serviceCount}" name="serviceCount${serviceCount}" 
@@ -430,12 +506,40 @@
         };
 
         async function updateInvoice(id) {
+            // Collect all services data
+            const services = [];
+            const serviceEntries = document.getElementsByClassName('service-entry');
+            
+            // Prepare URL parameters for redirection
+            const params = new URLSearchParams();
+            params.set('invoiceNumber', document.getElementById('invoiceNumber').value);
+            params.set('clientName', document.getElementById('clientName').value);
+            params.set('clientAddress', document.getElementById('clientAddress').value);
+            params.set('issueDate', document.getElementById('issueDate').value);
+            params.set('amountDue', document.getElementById('amountDue').value);
+            
+            // Add services to both API data and URL parameters
+            Array.from(serviceEntries).forEach((entry, index) => {
+                const serviceId = index + 1;
+                const name = document.getElementById(`serviceName${serviceId}`).value;
+                const count = document.getElementById(`serviceCount${serviceId}`).value;
+                const price = document.getElementById(`servicePrice${serviceId}`).value;
+                
+                services.push({ name, count, price });
+                
+                // Add to URL parameters
+                params.set(`serviceName${serviceId}`, name);
+                params.set(`serviceCount${serviceId}`, count);
+                params.set(`servicePrice${serviceId}`, price);
+            });
+
             const invoiceData = {
                 invoiceNumber: document.getElementById('invoiceNumber').value,
                 clientName: document.getElementById('clientName').value,
                 clientAddress: document.getElementById('clientAddress').value,
                 issueDate: document.getElementById('issueDate').value,
-                amountDue: document.getElementById('amountDue').value
+                amountDue: document.getElementById('amountDue').value,
+                services: services
             };
 
             try {
@@ -449,7 +553,8 @@
 
                 if (response.ok) {
                     alert('Invoice updated successfully');
-                    window.location.href = '/invoices.html';
+                    // Redirect to invoice page with all parameters
+                    window.location.href = `invoice.html?${params.toString()}`;
                 } else {
                     const error = await response.json();
                     alert('Failed to update: ' + error.error);
@@ -458,6 +563,138 @@
                 console.error('Error updating invoice:', error);
                 alert('Failed to update invoice');
             }
+        }
+
+        function showClientSuggestions() {
+            const input = document.getElementById('clientName');
+            const suggestionsDiv = document.getElementById('clientSuggestions');
+            const inputValue = input.value.toLowerCase();
+
+            if (inputValue.length < 1) {
+                suggestionsDiv.style.display = 'none';
+                return;
+            }
+
+            const matchingClients = Array.from(clients.values())
+                .filter(client => client.name.toLowerCase().includes(inputValue));
+
+            if (matchingClients.length > 0) {
+                suggestionsDiv.innerHTML = matchingClients
+                    .map(client => `<div class="suggestion-item" 
+                        onclick="selectClient('${client.name}')">${client.name}</div>`)
+                    .join('');
+                suggestionsDiv.style.display = 'block';
+            } else {
+                suggestionsDiv.innerHTML = `
+                    <div class="suggestion-item">
+                        No clients found. <a href="#" onclick="showAddClientModal('${inputValue}')">Add new client?</a>
+                    </div>`;
+                suggestionsDiv.style.display = 'block';
+            }
+        }
+
+        function selectClient(clientName) {
+            document.getElementById('clientName').value = clientName;
+            document.getElementById('clientSuggestions').style.display = 'none';
+            updateClientAddress();
+        }
+
+        function showAddClientModal(clientName = '') {
+            document.getElementById('newClientName').value = clientName;
+            document.getElementById('addClientModal').style.display = 'block';
+        }
+
+        function showAddServiceModal(serviceName = '') {
+            document.getElementById('newServiceName').value = serviceName;
+            document.getElementById('addServiceModal').style.display = 'block';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        async function saveNewClient() {
+            const name = document.getElementById('newClientName').value;
+            const address = document.getElementById('newClientAddress').value;
+
+            try {
+                const response = await fetch('/api/clients', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, address })
+                });
+
+                if (response.ok) {
+                    const client = await response.json();
+                    clients.set(name, { name, address });
+                    selectClient(name);
+                    closeModal('addClientModal');
+                    await fetchClients(); // Refresh clients list
+                }
+            } catch (error) {
+                console.error('Error saving client:', error);
+            }
+        }
+
+        async function saveNewService() {
+            const name = document.getElementById('newServiceName').value;
+            const rate = document.getElementById('newServiceRate').value;
+
+            try {
+                const response = await fetch('/api/services', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, rate })
+                });
+
+                if (response.ok) {
+                    const service = await response.json();
+                    services.set(name, { name, rate });
+                    if (currentServiceId) {
+                        selectService(currentServiceId, name, rate);
+                    }
+                    closeModal('addServiceModal');
+                    await fetchServices(); // Refresh services list
+                }
+            } catch (error) {
+                console.error('Error saving service:', error);
+            }
+        }
+
+        function showServiceSuggestions(serviceId) {
+            currentServiceId = serviceId;
+            const input = document.getElementById(`serviceName${serviceId}`);
+            const suggestionsDiv = document.getElementById(`serviceSuggestions${serviceId}`);
+            const inputValue = input.value.toLowerCase();
+
+            if (inputValue.length < 1) {
+                suggestionsDiv.style.display = 'none';
+                return;
+            }
+
+            const matchingServices = Array.from(services.values())
+                .filter(service => service.name.toLowerCase().includes(inputValue));
+
+            if (matchingServices.length > 0) {
+                suggestionsDiv.innerHTML = matchingServices
+                    .map(service => `<div class="suggestion-item" 
+                        onclick="selectService(${serviceId}, '${service.name}', ${service.rate})">${service.name}</div>`)
+                    .join('');
+                suggestionsDiv.style.display = 'block';
+            } else {
+                suggestionsDiv.innerHTML = `
+                    <div class="suggestion-item">
+                        No services found. <a href="#" onclick="showAddServiceModal('${inputValue}')">Add new service?</a>
+                    </div>`;
+                suggestionsDiv.style.display = 'block';
+            }
+        }
+
+        function selectService(serviceId, serviceName, rate) {
+            document.getElementById(`serviceName${serviceId}`).value = serviceName;
+            document.getElementById(`servicePrice${serviceId}`).value = rate;
+            document.getElementById(`serviceSuggestions${serviceId}`).style.display = 'none';
+            calculateTotal();
         }
     </script>
 </body>

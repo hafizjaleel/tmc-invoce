@@ -206,10 +206,17 @@ app.put('/api/invoices/:id', async (req, res) => {
             return res.status(404).json({ error: 'Invoice not found' });
         }
 
-        // Update the invoice
+        // Update the invoice including services array
         const result = await db.collection('invoices').updateOne(
             { _id: new ObjectId(req.params.id) },
-            { $set: req.body }
+            { 
+                $set: {
+                    ...req.body,
+                    services: req.body.services || [],
+                    totalAmount: parseFloat(req.body.amountDue || req.body.totalAmount),
+                    updatedAt: new Date()
+                }
+            }
         );
 
         // Update corresponding ledger entry
@@ -222,7 +229,8 @@ app.put('/api/invoices/:id', async (req, res) => {
                 $set: {
                     debit: parseFloat(req.body.amountDue || req.body.totalAmount),
                     date: new Date(req.body.issueDate),
-                    clientName: req.body.clientName
+                    clientName: req.body.clientName,
+                    updatedAt: new Date()
                 }
             }
         );
