@@ -347,7 +347,12 @@
             document.getElementById('invoiceNumberField').textContent = `#${urlParams.get('invoiceNumber')}`;
             document.getElementById('clientNameField').textContent = urlParams.get('clientName');
             document.getElementById('clientAddressField').textContent = urlParams.get('clientAddress');
-            document.getElementById('issueDateField').textContent = new Date(urlParams.get('issueDate')).toLocaleDateString();
+            
+            // Format date as dd/mm/yyyy
+            const date = new Date(urlParams.get('issueDate'));
+            const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+            document.getElementById('issueDateField').textContent = formattedDate;
+            
             document.getElementById('amountDueField').textContent = `₹${urlParams.get('amountDue')}`;
 
             // Create services table
@@ -361,10 +366,13 @@
                 const price = urlParams.get(`servicePrice${serviceIndex}`);
                 const total = parseFloat(count) * parseFloat(price);
 
+                // Format service name with line break before parentheses
+                const formattedName = name.replace(/\(/, '<br>(');
+
                 tableHTML += `
                     <tr>
                         <td>${serviceIndex}.</td>
-                        <td>${name}</td>
+                        <td>${formattedName}</td>
                         <td>${count}</td>
                         <td>₹ ${parseFloat(price).toFixed(2)}</td>
                         <td>₹ ${total.toFixed(2)}</td>

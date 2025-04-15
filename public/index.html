@@ -107,7 +107,7 @@
                         <div>
                             <strong>Invoice #${bill.invoiceNumber}</strong>
                             <p>Client: ${bill.clientName}</p>
-                            <p>Date: ${new Date(bill.issueDate).toLocaleDateString()}</p>
+                            <p>Date: ${new Date(bill.issueDate).toLocaleDateString('en-GB')}</p>
                             <p>Amount: ₹${bill.amountDue}</p>
                         </div>
                         <button class="print-btn" onclick="openInvoice('${bill.invoiceNumber}')">Print</button>
