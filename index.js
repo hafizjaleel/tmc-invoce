@@ -35,6 +35,28 @@ app.get('/api/invoices/check/:invoiceNumber', async (req, res) => {
     }
 });
 
+// Add this before the other invoice routes
+app.get('/api/invoices/last-number', async (req, res) => {
+    try {
+        const db = await connectToMongoDB();
+        const lastInvoice = await db.collection('invoices')
+            .find({})
+            .sort({ invoiceNumber: -1 })
+            .limit(1)
+            .toArray();
+        
+        let nextNumber = '1';
+        if (lastInvoice.length > 0) {
+            const lastNumber = parseInt(lastInvoice[0].invoiceNumber);
+            nextNumber = (lastNumber + 1).toString();
+        }
+        
+        res.json({ nextNumber });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.post('/api/invoices', async (req, res) => {
     try {
         const db = await connectToMongoDB();

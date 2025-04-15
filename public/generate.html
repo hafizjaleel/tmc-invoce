@@ -410,6 +410,18 @@
             await Promise.all([fetchClients(), fetchServices()]);
             setCurrentDate();
 
+            // Add this block to fetch and set the invoice number
+            if (!localStorage.getItem('editInvoice')) {
+                try {
+                    const response = await fetch('/api/invoices/last-number');
+                    const data = await response.json();
+                    document.getElementById('invoiceNumber').value = data.nextNumber;
+                    document.getElementById('invoiceNumber').readOnly = true;
+                } catch (error) {
+                    console.error('Error fetching invoice number:', error);
+                }
+            }
+
             // Add form submit handler
             document.getElementById('invoiceForm').onsubmit = async function(e) {
                 e.preventDefault();
