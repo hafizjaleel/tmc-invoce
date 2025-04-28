@@ -285,6 +285,9 @@
             let balance = 0;
 
             if (data && data.length > 0) {
+                // Sort data in ascending order by date
+                data.sort((a, b) => new Date(a.date) - new Date(b.date));
+                
                 data.forEach(entry => {
                     const row = document.createElement('tr');
                     const debitAmount = parseFloat(entry.debit) || 0;
